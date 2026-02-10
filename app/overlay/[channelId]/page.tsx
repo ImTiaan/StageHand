@@ -8,20 +8,43 @@ import { Stage } from "@/components/Stage";
 export default function OverlayPage({ params }: { params: { channelId: string } }) {
   const socket = useSocket();
   const [stageState, setStageState] = useState<StageState | null>(null);
+  const storageKey = `stagehand:overlay:${params.channelId}`;
+
+  useEffect(() => {
+    const cached = localStorage.getItem(storageKey);
+    if (cached) {
+      try {
+        setStageState(JSON.parse(cached));
+      } catch {
+        localStorage.removeItem(storageKey);
+      }
+    }
+  }, [storageKey]);
 
   useEffect(() => {
     if (!socket) return;
 
-    socket.emit("stage:join", params.channelId);
+    const joinStage = () => {
+      socket.emit("stage:join", params.channelId);
+    };
+
+    joinStage();
+    socket.on("connect", joinStage);
 
     socket.on("stage:update", (state) => {
       setStageState(state);
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(state));
+      } catch {
+        localStorage.removeItem(storageKey);
+      }
     });
 
     return () => {
+      socket.off("connect", joinStage);
       socket.off("stage:update");
     };
-  }, [socket, params.channelId]);
+  }, [socket, params.channelId, storageKey]);
 
   useEffect(() => {
     const previousBodyBackground = document.body.style.background;

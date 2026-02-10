@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useSocket } from "@/hooks/useSocket";
 import { supabase } from "@/lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
-import { StageState, Asset } from "@/types";
+import { StageState, Asset, UserRole } from "@/types";
 import { Stage } from "@/components/Stage";
 
 type AssetRow = {
@@ -29,6 +29,20 @@ const mapAssetRow = (row: AssetRow): Asset => ({
   createdAt: new Date(row.created_at).getTime(),
 });
 
+const toChannelSlug = (value: string) => value.trim().toLowerCase().replace(/\s+/g, "-");
+
+const resolveOwnerSlug = (session: Session | null) => {
+  if (!session?.user) return "";
+  const metadata = session.user.user_metadata ?? {};
+  const preferred =
+    metadata.preferred_username ??
+    metadata.user_name ??
+    metadata.name ??
+    session.user.email?.split("@")[0] ??
+    session.user.id;
+  return toChannelSlug(String(preferred));
+};
+
 export default function ProducerPage({ params }: { params: { channelId: string } }) {
   const [session, setSession] = useState<Session | null>(null);
   const socket = useSocket(session?.access_token ?? null);
@@ -39,6 +53,8 @@ export default function ProducerPage({ params }: { params: { channelId: string }
   const [pendingAssets, setPendingAssets] = useState<Asset[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
+  const [roleLoading, setRoleLoading] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
@@ -56,6 +72,7 @@ export default function ProducerPage({ params }: { params: { channelId: string }
 
   useEffect(() => {
     if (!socket) return;
+    if (role !== "PRODUCER") return;
 
     socket.emit("stage:join", params.channelId);
 
@@ -72,7 +89,7 @@ export default function ProducerPage({ params }: { params: { channelId: string }
       socket.off("stage:update");
       socket.off("stage:log");
     };
-  }, [socket, params.channelId]);
+  }, [socket, params.channelId, role]);
 
   useEffect(() => {
     if (!session) return;
@@ -96,6 +113,37 @@ export default function ProducerPage({ params }: { params: { channelId: string }
 
     loadPendingAssets();
   }, [session]);
+
+  useEffect(() => {
+    if (!session) {
+      setRole(null);
+      return;
+    }
+    const channelSlug = toChannelSlug(params.channelId);
+    const ownerSlug = resolveOwnerSlug(session);
+    if (channelSlug && channelSlug === ownerSlug) {
+      setRole("PRODUCER");
+      return;
+    }
+    const loadRole = async () => {
+      setRoleLoading(true);
+      const { data, error } = await supabase
+        .from("channel_members")
+        .select("role")
+        .eq("channel_id", channelSlug)
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      if (error || !data?.role) {
+        setRole("GUEST");
+      } else {
+        setRole(data.role as UserRole);
+      }
+      setRoleLoading(false);
+    };
+
+    loadRole();
+  }, [session, params.channelId]);
 
   // Handle auto-scaling for preview
   useEffect(() => {
@@ -185,6 +233,27 @@ export default function ProducerPage({ params }: { params: { channelId: string }
     );
   }
 
+  if (roleLoading) {
+    return <div className="p-8 text-emerald-100/70">Checking access...</div>;
+  }
+
+  if (role !== "PRODUCER") {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="glass-panel rounded-lg p-8 w-full max-w-md text-center space-y-4">
+          <h1 className="text-2xl font-bold">StageHand Producer</h1>
+          <p className="text-emerald-100/70 text-sm">You do not have producer access for this channel.</p>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="w-full glass-button font-bold py-3 px-4 rounded-lg transition"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!stageState) {
     return <div className="p-8 text-emerald-100/70">Connecting to Producer Console...</div>;
   }
@@ -226,7 +295,7 @@ export default function ProducerPage({ params }: { params: { channelId: string }
 
         <div className="flex-1 overflow-auto">
             <h2 className="text-lg font-semibold mb-2">Audit Log</h2>
-            <div className="text-xs text-emerald-100/70 font-mono bg-black/30 p-2 rounded h-40 overflow-y-auto">
+            <div className="text-xs text-emerald-100/70 font-mono glass-panel p-2 rounded h-40 overflow-y-auto">
                 {logs.length === 0 ? (
                     <div className="text-emerald-100/50 italic">No activity yet</div>
                 ) : (
@@ -239,8 +308,8 @@ export default function ProducerPage({ params }: { params: { channelId: string }
 
         <div className="flex-1 overflow-auto">
           <h2 className="text-lg font-semibold mb-2">Pending Uploads</h2>
-          {pendingMessage && <div className="text-xs text-emerald-100/70 mb-2">{pendingMessage}</div>}
-          <div className="text-xs text-emerald-100/80 bg-black/30 p-2 rounded h-40 overflow-y-auto">
+          {pendingMessage && <div className="text-xs text-emerald-100/70 glass-panel p-2 rounded mb-2">{pendingMessage}</div>}
+          <div className="text-xs text-emerald-100/80 glass-panel p-2 rounded h-40 overflow-y-auto">
             {pendingLoading && <div className="text-emerald-100/50 italic">Loading uploads...</div>}
             {!pendingLoading && pendingAssets.length === 0 && (
               <div className="text-emerald-100/50 italic">Nothing waiting for approval</div>
@@ -276,7 +345,7 @@ export default function ProducerPage({ params }: { params: { channelId: string }
         <h2 className="text-emerald-100/60 mb-4 font-mono uppercase tracking-widest">Live Output Preview</h2>
         <div 
             ref={containerRef}
-            className="w-full h-full max-w-[1000px] max-h-[600px] flex items-center justify-center relative overflow-hidden"
+            className="w-full h-full max-w-[1000px] max-h-[600px] flex items-center justify-center relative overflow-hidden glass-panel p-6"
         >
             <div
             className="relative bg-black/70 shadow-2xl border border-emerald-200/10 overflow-hidden pointer-events-none"

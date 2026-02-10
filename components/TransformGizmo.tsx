@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Transform } from "@/types";
 
 interface TransformGizmoProps {
@@ -46,7 +46,7 @@ export const TransformGizmo = ({
   }>({});
 
   // Helper: Convert screen mouse coords to Stage Reference Pixels (e.g. 1920x1080 space)
-  const getStagePoint = (clientX: number, clientY: number) => {
+  const getStagePoint = useCallback((clientX: number, clientY: number) => {
     if (!containerRef.current || !stageConfig) return { x: 0, y: 0 };
     const rect = containerRef.current.getBoundingClientRect();
     
@@ -59,16 +59,16 @@ export const TransformGizmo = ({
         x: normX * stageConfig.width,
         y: normY * stageConfig.height
     };
-  };
+  }, [containerRef, stageConfig]);
 
   // Helper: Convert Stage Reference Pixels to Normalized (0-1)
-  const toNormalized = (point: { x: number, y: number }) => {
+  const toNormalized = useCallback((point: { x: number, y: number }) => {
       if (!stageConfig) return { x: 0, y: 0 };
       return {
           x: point.x / stageConfig.width,
           y: point.y / stageConfig.height
       };
-  };
+  }, [stageConfig]);
 
   // Drag Logic
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -258,7 +258,7 @@ export const TransformGizmo = ({
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isDragging, resizeHandle, isRotating, onUpdate, onDragEnd, stageConfig]);
+  }, [isDragging, resizeHandle, isRotating, onUpdate, onDragEnd, stageConfig, containerRef, getStagePoint, toNormalized]);
 
   return (
     <div
@@ -283,7 +283,7 @@ export const TransformGizmo = ({
         {children}
 
         {isLocked && (
-             <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap z-50 font-bold tracking-wider uppercase shadow-lg border border-red-400">
+             <div className="absolute -top-6 left-1/2 -translate-x-1/2 glass-panel text-rose-200 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap z-50 font-bold tracking-wider uppercase border border-rose-300/40">
                 LOCKED
             </div>
         )}
@@ -292,28 +292,28 @@ export const TransformGizmo = ({
           <>
             {/* Corners */}
             <div
-              className="absolute -top-2 -left-2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-nwse-resize z-50"
+              className="absolute -top-2 -left-2 w-4 h-4 glass-panel border border-emerald-200/60 rounded-full cursor-nwse-resize z-50"
               onMouseDown={(e) => handleResizeStart(e, 'tl')}
             />
             <div
-              className="absolute -top-2 -right-2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-nesw-resize z-50"
+              className="absolute -top-2 -right-2 w-4 h-4 glass-panel border border-emerald-200/60 rounded-full cursor-nesw-resize z-50"
               onMouseDown={(e) => handleResizeStart(e, 'tr')}
             />
             <div
-              className="absolute -bottom-2 -left-2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-nesw-resize z-50"
+              className="absolute -bottom-2 -left-2 w-4 h-4 glass-panel border border-emerald-200/60 rounded-full cursor-nesw-resize z-50"
               onMouseDown={(e) => handleResizeStart(e, 'bl')}
             />
             <div
-              className="absolute -bottom-2 -right-2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-nwse-resize z-50"
+              className="absolute -bottom-2 -right-2 w-4 h-4 glass-panel border border-emerald-200/60 rounded-full cursor-nwse-resize z-50"
               onMouseDown={(e) => handleResizeStart(e, 'br')}
             />
             
             {/* Rotate Handle */}
             <div
-              className="absolute -top-8 left-1/2 -translate-x-1/2 w-4 h-4 bg-blue-500 border-2 border-white rounded-full cursor-ew-resize z-50 flex flex-col items-center"
+              className="absolute -top-8 left-1/2 -translate-x-1/2 w-4 h-4 glass-panel border border-emerald-200/60 rounded-full cursor-ew-resize z-50 flex flex-col items-center"
               onMouseDown={handleRotateStart}
             >
-                <div className="w-0.5 h-4 bg-blue-500 absolute top-full left-1/2 -translate-x-1/2" />
+                <div className="w-0.5 h-4 bg-emerald-200/60 absolute top-full left-1/2 -translate-x-1/2" />
             </div>
           </>
         )}

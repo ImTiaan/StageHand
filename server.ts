@@ -4,7 +4,7 @@ import next from "next";
 import { Server, Socket } from "socket.io";
 import { v4 as uuidv4 } from "uuid";
 import { createClient } from "@supabase/supabase-js";
-import { StageState, ServerToClientEvents, ClientToServerEvents, StageElement, Asset } from "./types";
+import { StageState, ServerToClientEvents, ClientToServerEvents, StageElement, Asset, UserRole } from "./types";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";
@@ -12,7 +12,9 @@ const port = Number(process.env.PORT ?? 3000);
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY ?? "";
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey);
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
@@ -68,6 +70,10 @@ type AssetRow = {
   created_at: string;
 };
 
+type ChannelMemberRow = {
+  role: UserRole;
+};
+
 const mapAssetRow = (row: AssetRow): Asset => ({
   id: row.id,
   type: row.type,
@@ -100,6 +106,17 @@ const fetchAsset = async (assetId: string): Promise<Asset | null> => {
   }
 
   return asset;
+};
+
+const toChannelSlug = (value: string) => value.trim().toLowerCase().replace(/\s+/g, "-");
+
+const resolveOwnerSlug = (metadata: Record<string, unknown>, fallbackId: string) => {
+  const preferred =
+    metadata.preferred_username ??
+    metadata.user_name ??
+    metadata.name ??
+    fallbackId;
+  return toChannelSlug(String(preferred));
 };
 
 const getOrCreateStage = (channelId: string): StageState => {
@@ -164,6 +181,7 @@ app.prepare().then(() => {
       socket.data.user = {
         id: data.user.id,
         email: data.user.email,
+        metadata: data.user.user_metadata ?? {},
       };
     }
     return next();
@@ -181,6 +199,40 @@ app.prepare().then(() => {
       io.to(channelId).emit("stage:log", message, socket.id);
     };
 
+    const roleCache = new Map<string, UserRole>();
+
+    const getRoleForChannel = async (channelId: string): Promise<UserRole> => {
+      if (!socket.data.user) return "GUEST";
+      const cached = roleCache.get(channelId);
+      if (cached) return cached;
+
+      const ownerSlug = resolveOwnerSlug(socket.data.user.metadata ?? {}, socket.data.user.id);
+      if (ownerSlug === toChannelSlug(channelId)) {
+        roleCache.set(channelId, "PRODUCER");
+        return "PRODUCER";
+      }
+
+      if (!supabaseUrl || !supabaseAnonKey) {
+        roleCache.set(channelId, "GUEST");
+        return "GUEST";
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from("channel_members")
+        .select("role")
+        .eq("channel_id", toChannelSlug(channelId))
+        .eq("user_id", socket.data.user.id)
+        .maybeSingle();
+
+      if (error || !data?.role) {
+        roleCache.set(channelId, "GUEST");
+        return "GUEST";
+      }
+
+      roleCache.set(channelId, data.role as UserRole);
+      return data.role as UserRole;
+    };
+
     socket.on("stage:join", (channelId) => {
       socket.join(channelId);
       const stage = getOrCreateStage(channelId);
@@ -193,6 +245,11 @@ app.prepare().then(() => {
       const channelId = getChannelId();
       if (!channelId) return;
       if (!socket.data.user) {
+        socket.emit("error", "Unauthorised");
+        return;
+      }
+      const role = await getRoleForChannel(channelId);
+      if (role !== "PRODUCER" && role !== "OPERATOR" && role !== "LOADER") {
         socket.emit("error", "Unauthorised");
         return;
       }
@@ -232,10 +289,15 @@ app.prepare().then(() => {
       log(channelId, `Added element ${asset.filename}`);
     });
 
-    socket.on("stage:update-element", (elementId, transform) => {
+    socket.on("stage:update-element", async (elementId, transform) => {
       const channelId = getChannelId();
       if (!channelId) return;
       if (!socket.data.user) {
+        socket.emit("error", "Unauthorised");
+        return;
+      }
+      const role = await getRoleForChannel(channelId);
+      if (role !== "PRODUCER" && role !== "OPERATOR") {
         socket.emit("error", "Unauthorised");
         return;
       }
@@ -261,10 +323,15 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("stage:lock-element", (elementId) => {
+    socket.on("stage:lock-element", async (elementId) => {
       const channelId = getChannelId();
       if (!channelId) return;
       if (!socket.data.user) {
+        socket.emit("error", "Unauthorised");
+        return;
+      }
+      const role = await getRoleForChannel(channelId);
+      if (role !== "PRODUCER" && role !== "OPERATOR") {
         socket.emit("error", "Unauthorised");
         return;
       }
@@ -281,10 +348,15 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("stage:unlock-element", (elementId) => {
+    socket.on("stage:unlock-element", async (elementId) => {
       const channelId = getChannelId();
       if (!channelId) return;
       if (!socket.data.user) {
+        socket.emit("error", "Unauthorised");
+        return;
+      }
+      const role = await getRoleForChannel(channelId);
+      if (role !== "PRODUCER" && role !== "OPERATOR") {
         socket.emit("error", "Unauthorised");
         return;
       }
@@ -299,10 +371,15 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("stage:drag-start", (elementId) => {
+    socket.on("stage:drag-start", async (elementId) => {
       const channelId = getChannelId();
       if (!channelId) return;
       if (!socket.data.user) {
+        socket.emit("error", "Unauthorised");
+        return;
+      }
+      const role = await getRoleForChannel(channelId);
+      if (role !== "PRODUCER" && role !== "OPERATOR") {
         socket.emit("error", "Unauthorised");
         return;
       }
@@ -312,10 +389,15 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("stage:remove-element", (elementId) => {
+    socket.on("stage:remove-element", async (elementId) => {
         const channelId = getChannelId();
         if (!channelId) return;
         if (!socket.data.user) {
+          socket.emit("error", "Unauthorised");
+          return;
+        }
+        const role = await getRoleForChannel(channelId);
+        if (role !== "PRODUCER" && role !== "OPERATOR") {
           socket.emit("error", "Unauthorised");
           return;
         }
@@ -339,10 +421,15 @@ app.prepare().then(() => {
         }
     });
 
-    socket.on("stage:clear", () => {
+    socket.on("stage:clear", async () => {
       const channelId = getChannelId();
       if (!channelId) return;
       if (!socket.data.user) {
+        socket.emit("error", "Unauthorised");
+        return;
+      }
+      const role = await getRoleForChannel(channelId);
+      if (role !== "PRODUCER") {
         socket.emit("error", "Unauthorised");
         return;
       }
@@ -356,10 +443,15 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("stage:undo", () => {
+    socket.on("stage:undo", async () => {
       const channelId = getChannelId();
       if (!channelId) return;
       if (!socket.data.user) {
+        socket.emit("error", "Unauthorised");
+        return;
+      }
+      const role = await getRoleForChannel(channelId);
+      if (role !== "PRODUCER") {
         socket.emit("error", "Unauthorised");
         return;
       }
@@ -378,10 +470,15 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("stage:toggle-lock", () => {
+    socket.on("stage:toggle-lock", async () => {
       const channelId = getChannelId();
       if (!channelId) return;
       if (!socket.data.user) {
+        socket.emit("error", "Unauthorised");
+        return;
+      }
+      const role = await getRoleForChannel(channelId);
+      if (role !== "PRODUCER") {
         socket.emit("error", "Unauthorised");
         return;
       }
