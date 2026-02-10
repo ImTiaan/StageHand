@@ -10,7 +10,8 @@ export const useSocket = (accessToken?: string | null) => {
       return;
     }
 
-    const socketInstance = io({
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
+    const socketInstance = io(socketUrl || undefined, {
       auth: accessToken ? { access_token: accessToken } : undefined,
     });
 
