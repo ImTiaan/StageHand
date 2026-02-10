@@ -1,5 +1,6 @@
 import { StageState, StageElement } from "@/types";
 import React from "react";
+import Image from "next/image";
 
 interface StageProps {
   state: StageState | null;
@@ -20,11 +21,14 @@ const ElementRenderer = ({ element }: { element: StageElement }) => {
 
   if (asset.type === "IMAGE") {
     return (
-      <img
+      <Image
         src={asset.url}
         alt={asset.filename}
+        width={asset.metadata?.width ?? 512}
+        height={asset.metadata?.height ?? 512}
         style={style}
         className="max-w-none"
+        unoptimized
       />
     );
   }

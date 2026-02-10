@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import Image from "next/image";
 import { useSocket } from "@/hooks/useSocket";
 import { supabase } from "@/lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
-import { StageState, Asset } from "@/types";
+import { StageState, Asset, UserRole } from "@/types";
 import { TransformGizmo } from "@/components/TransformGizmo";
 
 type AssetRow = {
@@ -29,6 +30,20 @@ const mapAssetRow = (row: AssetRow): Asset => ({
   createdAt: new Date(row.created_at).getTime(),
 });
 
+const toChannelSlug = (value: string) => value.trim().toLowerCase().replace(/\s+/g, "-");
+
+const resolveOwnerSlug = (session: Session | null) => {
+  if (!session?.user) return "";
+  const metadata = session.user.user_metadata ?? {};
+  const preferred =
+    metadata.preferred_username ??
+    metadata.user_name ??
+    metadata.name ??
+    session.user.email?.split("@")[0] ??
+    session.user.id;
+  return toChannelSlug(String(preferred));
+};
+
 export default function ConsolePage({ params }: { params: { channelId: string } }) {
   const [session, setSession] = useState<Session | null>(null);
   const socket = useSocket(session?.access_token ?? null);
@@ -41,6 +56,11 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
   const [assetsLoading, setAssetsLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
+  const [roleLoading, setRoleLoading] = useState(false);
+  const canManipulate = role === "PRODUCER" || role === "OPERATOR";
+  const canSpawn = role === "PRODUCER" || role === "OPERATOR" || role === "LOADER";
+  const canUpload = role === "PRODUCER" || role === "OPERATOR";
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
@@ -58,12 +78,13 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
 
   useEffect(() => {
     if (!socket) return;
+    if (!role || (role !== "PRODUCER" && role !== "OPERATOR" && role !== "LOADER")) return;
     socket.emit("stage:join", params.channelId);
     socket.on("stage:update", (state) => setStageState(state));
     return () => {
         socket.off("stage:update");
     };
-  }, [socket, params.channelId]);
+  }, [socket, params.channelId, role]);
 
   useEffect(() => {
     if (!session) return;
@@ -86,6 +107,37 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
 
     loadAssets();
   }, [session]);
+
+  useEffect(() => {
+    if (!session) {
+      setRole(null);
+      return;
+    }
+    const channelSlug = toChannelSlug(params.channelId);
+    const ownerSlug = resolveOwnerSlug(session);
+    if (channelSlug && channelSlug === ownerSlug) {
+      setRole("PRODUCER");
+      return;
+    }
+    const loadRole = async () => {
+      setRoleLoading(true);
+      const { data, error } = await supabase
+        .from("channel_members")
+        .select("role")
+        .eq("channel_id", channelSlug)
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      if (error || !data?.role) {
+        setRole("GUEST");
+      } else {
+        setRole(data.role as UserRole);
+      }
+      setRoleLoading(false);
+    };
+
+    loadRole();
+  }, [session, params.channelId]);
 
   // Handle auto-scaling of the stage to fit container
   useEffect(() => {
@@ -115,6 +167,7 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
 
   const spawnAsset = (assetId: string) => {
     if (!socket) return;
+    if (!canSpawn) return;
     socket.emit("stage:add-element", assetId);
   };
 
@@ -128,15 +181,18 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
   const removeElement = (e: React.MouseEvent, elementId: string) => {
     e.stopPropagation();
     if(!socket) return;
+    if (!canManipulate) return;
     socket.emit("stage:remove-element", elementId);
   }
 
   const handleUpdate = (elementId: string, newTransform: any) => {
       if(!socket) return;
+      if (!canManipulate) return;
       socket.emit("stage:update-element", elementId, newTransform);
   };
 
   const handleDragStart = (elementId: string) => {
+      if (!canManipulate) return;
       setSelectedId(elementId);
       if(socket) {
           socket.emit("stage:drag-start", elementId);
@@ -145,6 +201,7 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
   };
 
   const handleDragEnd = (elementId: string) => {
+      if (!canManipulate) return;
       if(socket) {
           socket.emit("stage:unlock-element", elementId);
       }
@@ -152,12 +209,31 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !session) return;
+    if (!file || !session || !canUpload) return;
     setUploading(true);
     setUploadMessage(null);
 
     const formData = new FormData();
     formData.append("file", file);
+    if (file.type.startsWith("image/")) {
+      const dimensions = await new Promise<{ width: number; height: number } | null>((resolve) => {
+        const image = new window.Image();
+        const url = URL.createObjectURL(file);
+        image.onload = () => {
+          resolve({ width: image.naturalWidth, height: image.naturalHeight });
+          URL.revokeObjectURL(url);
+        };
+        image.onerror = () => {
+          resolve(null);
+          URL.revokeObjectURL(url);
+        };
+        image.src = url;
+      });
+      if (dimensions) {
+        formData.append("width", String(dimensions.width));
+        formData.append("height", String(dimensions.height));
+      }
+    }
 
     const response = await fetch("/api/uploads", {
       method: "POST",
@@ -202,6 +278,27 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
     );
   }
 
+  if (roleLoading) {
+    return <div className="p-8 text-emerald-100/70">Checking access...</div>;
+  }
+
+  if (role !== "PRODUCER" && role !== "OPERATOR" && role !== "LOADER") {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="glass-panel rounded-lg p-8 w-full max-w-md text-center space-y-4">
+          <h1 className="text-2xl font-bold">StageHand Console</h1>
+          <p className="text-emerald-100/70 text-sm">You do not have access to this channel.</p>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="w-full glass-button font-bold py-3 px-4 rounded-lg transition"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!stageState) {
     return <div className="p-8 text-emerald-100/70">Connecting to StageHand Console...</div>;
   }
@@ -220,13 +317,15 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
       {/* Sidebar */}
       <div className={`w-64 glass-panel p-4 flex flex-col gap-4 ${stageState.config.locked ? "opacity-50 pointer-events-none" : ""}`}>
         <h2 className="text-xl font-bold">Assets</h2>
-        <label className="glass-button text-sm font-semibold py-2 px-3 rounded cursor-pointer text-center">
+        <label
+          className={`glass-button text-sm font-semibold py-2 px-3 rounded cursor-pointer text-center ${canUpload ? "" : "opacity-50 pointer-events-none"}`}
+        >
           <input
             type="file"
             accept="image/*,video/*"
             className="hidden"
             onChange={handleUpload}
-            disabled={uploading}
+            disabled={uploading || !canUpload}
           />
           {uploading ? "Uploading..." : "Upload Asset"}
         </label>
@@ -240,11 +339,12 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
             <button
               key={asset.id}
               onClick={() => spawnAsset(asset.id)}
-              className="p-2 glass-panel hover:border-emerald-200/40 rounded flex flex-col items-center gap-2 text-xs"
+              disabled={!canSpawn}
+              className={`p-2 glass-panel rounded flex flex-col items-center gap-2 text-xs ${canSpawn ? "hover:border-emerald-200/40" : "opacity-50 pointer-events-none"}`}
             >
               {asset.type === "IMAGE" ? (
-                <div className="w-full aspect-square bg-black/40 flex items-center justify-center rounded">
-                    <img src={asset.url} className="max-w-full max-h-full" />
+                <div className="relative w-full aspect-square bg-black/40 flex items-center justify-center rounded overflow-hidden">
+                  <Image src={asset.url} alt={asset.filename} fill sizes="120px" className="object-contain" unoptimized />
                 </div>
               ) : asset.type === "VIDEO" ? (
                 <div className="w-full aspect-square bg-black/40 flex items-center justify-center font-bold rounded">VID</div>
@@ -264,7 +364,7 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
       >
         <div
           ref={stageRef}
-          className="relative bg-black/70 shadow-2xl border border-emerald-200/10 overflow-hidden"
+          className="relative bg-black/70 shadow-2xl border border-emerald-200/10 overflow-hidden glass-panel"
           style={{
             width: stageState.config.width,
             height: stageState.config.height,
@@ -293,7 +393,14 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
                 <div className="relative group">
                     {/* Visual Representation */}
                     {element.asset.type === "IMAGE" && (
-                        <img src={element.asset.url} className="pointer-events-none max-w-none" />
+                        <Image
+                          src={element.asset.url}
+                          alt={element.asset.filename}
+                          width={element.asset.metadata?.width ?? 512}
+                          height={element.asset.metadata?.height ?? 512}
+                          className="pointer-events-none max-w-none"
+                          unoptimized
+                        />
                     )}
                     {element.asset.type === "VIDEO" && (
                         <video src={element.asset.url} className="pointer-events-none max-w-none" autoPlay loop muted playsInline />
@@ -305,7 +412,7 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
                     )}
                     
                     {/* Quick Actions (Always visible if selected, or on hover) */}
-                    {(selectedId === element.id) && (
+                    {(selectedId === element.id && canManipulate) && (
                         <button 
                             className="absolute -top-6 right-0 bg-red-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs z-50 hover:bg-red-600"
                             onMouseDown={(e) => removeElement(e, element.id)}
@@ -319,7 +426,7 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
         </div>
         
         {/* Helper UI */}
-        <div className="absolute bottom-4 right-4 text-gray-500 text-sm">
+        <div className="absolute bottom-4 right-4 glass-panel px-3 py-2 rounded text-emerald-100/70 text-xs">
             Click to select. Drag to move. Use handles to resize/rotate.
         </div>
       </div>

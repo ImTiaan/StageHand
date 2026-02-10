@@ -42,6 +42,8 @@ export async function POST(request: Request) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "File is required" }, { status: 400 });
   }
+  const width = formData.get("width");
+  const height = formData.get("height");
 
   const assetType = toAssetType(file.type);
   if (!assetType) {
@@ -53,16 +55,27 @@ export async function POST(request: Request) {
     access: "public",
   });
 
+  const metadata: Record<string, number | string> = {
+    mimeType: file.type,
+    size: file.size,
+  };
+
+  if (width && height) {
+    const parsedWidth = Number(width);
+    const parsedHeight = Number(height);
+    if (!Number.isNaN(parsedWidth) && !Number.isNaN(parsedHeight)) {
+      metadata.width = parsedWidth;
+      metadata.height = parsedHeight;
+    }
+  }
+
   const { data: asset, error: assetError } = await supabase
     .from("assets")
     .insert({
       type: assetType,
       url: blob.url,
       filename: file.name,
-      metadata: {
-        mimeType: file.type,
-        size: file.size,
-      },
+      metadata,
       uploader_id: userData.user.id,
       approved: false,
     })
