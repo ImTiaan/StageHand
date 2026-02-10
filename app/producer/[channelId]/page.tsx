@@ -163,10 +163,10 @@ export default function ProducerPage({ params }: { params: { channelId: string }
 
   if (!session) {
     return (
-      <div className="flex h-screen bg-gray-900 text-white items-center justify-center">
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-8 w-full max-w-md text-center space-y-4">
+      <div className="flex h-screen items-center justify-center">
+        <div className="glass-panel rounded-lg p-8 w-full max-w-md text-center space-y-4">
           <h1 className="text-2xl font-bold">StageHand Producer</h1>
-          <p className="text-gray-400 text-sm">Sign in with Twitch to continue</p>
+          <p className="text-emerald-100/70 text-sm">Sign in with Twitch to continue</p>
           <button
             onClick={() =>
               supabase.auth.signInWithOAuth({
@@ -176,7 +176,7 @@ export default function ProducerPage({ params }: { params: { channelId: string }
                 },
               })
             }
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded shadow-lg transition"
+            className="w-full glass-button font-bold py-3 px-4 rounded-lg transition"
           >
             Sign in with Twitch
           </button>
@@ -186,38 +186,38 @@ export default function ProducerPage({ params }: { params: { channelId: string }
   }
 
   if (!stageState) {
-    return <div className="p-8">Connecting to Producer Console...</div>;
+    return <div className="p-8 text-emerald-100/70">Connecting to Producer Console...</div>;
   }
 
   return (
-    <div className="flex h-screen bg-gray-900 text-white">
+    <div className="flex h-screen">
       {/* Sidebar Controls */}
-      <div className="w-80 bg-gray-800 border-r border-gray-700 p-6 flex flex-col gap-8">
+      <div className="w-80 glass-panel p-6 flex flex-col gap-8">
         <div>
             <h1 className="text-2xl font-bold mb-2">Producer Console</h1>
-            <p className="text-gray-400 text-sm">Channel: {params.channelId}</p>
+            <p className="text-emerald-100/70 text-sm">Channel: {params.channelId}</p>
         </div>
 
         <div className="flex flex-col gap-4">
-            <h2 className="text-lg font-semibold text-red-400">Panic Controls</h2>
+            <h2 className="text-lg font-semibold text-emerald-100">Panic Controls</h2>
             <button 
                 onClick={clearStage}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded shadow-lg transition"
+                className="glass-button font-bold py-3 px-4 rounded-lg transition"
             >
                 CLEAR STAGE
             </button>
             <button 
                 onClick={undo}
-                className="bg-gray-700 hover:bg-gray-600 text-gray-300 font-bold py-2 px-4 rounded border border-gray-600"
+                className="glass-button font-bold py-2 px-4 rounded-lg transition"
             >
                 Undo Last Action
             </button>
             <button 
                 onClick={toggleLock}
-                className={`font-bold py-2 px-4 rounded border border-gray-600 transition ${
+                className={`font-bold py-2 px-4 rounded-lg transition ${
                     stageState.config.locked 
-                    ? "bg-red-900 text-red-100 border-red-500 animate-pulse" 
-                    : "bg-gray-700 hover:bg-gray-600 text-gray-300"
+                    ? "glass-panel text-emerald-50 border-emerald-200/50 animate-pulse" 
+                    : "glass-button"
                 }`}
             >
                 {stageState.config.locked ? "UNLOCK STAGE" : "LOCK STAGE (KILL SWITCH)"}
@@ -226,9 +226,9 @@ export default function ProducerPage({ params }: { params: { channelId: string }
 
         <div className="flex-1 overflow-auto">
             <h2 className="text-lg font-semibold mb-2">Audit Log</h2>
-            <div className="text-xs text-gray-400 font-mono bg-black/30 p-2 rounded h-40 overflow-y-auto">
+            <div className="text-xs text-emerald-100/70 font-mono bg-black/30 p-2 rounded h-40 overflow-y-auto">
                 {logs.length === 0 ? (
-                    <div className="text-gray-600 italic">No activity yet</div>
+                    <div className="text-emerald-100/50 italic">No activity yet</div>
                 ) : (
                     logs.map((log, i) => (
                         <div key={i} className="mb-1">{log}</div>
@@ -239,28 +239,28 @@ export default function ProducerPage({ params }: { params: { channelId: string }
 
         <div className="flex-1 overflow-auto">
           <h2 className="text-lg font-semibold mb-2">Pending Uploads</h2>
-          {pendingMessage && <div className="text-xs text-gray-400 mb-2">{pendingMessage}</div>}
-          <div className="text-xs text-gray-300 bg-black/30 p-2 rounded h-40 overflow-y-auto">
-            {pendingLoading && <div className="text-gray-600 italic">Loading uploads...</div>}
+          {pendingMessage && <div className="text-xs text-emerald-100/70 mb-2">{pendingMessage}</div>}
+          <div className="text-xs text-emerald-100/80 bg-black/30 p-2 rounded h-40 overflow-y-auto">
+            {pendingLoading && <div className="text-emerald-100/50 italic">Loading uploads...</div>}
             {!pendingLoading && pendingAssets.length === 0 && (
-              <div className="text-gray-600 italic">Nothing waiting for approval</div>
+              <div className="text-emerald-100/50 italic">Nothing waiting for approval</div>
             )}
             {pendingAssets.map((asset) => (
               <div key={asset.id} className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex flex-col">
                   <span className="font-semibold">{asset.filename}</span>
-                  <span className="text-gray-500">{asset.type}</span>
+                  <span className="text-emerald-100/60">{asset.type}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => approveAsset(asset.id)}
-                    className="bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-2 py-1 rounded"
+                    className="glass-button text-xs font-semibold px-2 py-1 rounded"
                   >
                     Approve
                   </button>
                   <button
                     onClick={() => rejectAsset(asset.id)}
-                    className="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-2 py-1 rounded"
+                    className="glass-button text-xs font-semibold px-2 py-1 rounded"
                   >
                     Reject
                   </button>
@@ -272,14 +272,14 @@ export default function ProducerPage({ params }: { params: { channelId: string }
       </div>
 
       {/* Live Preview */}
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-gray-950">
-        <h2 className="text-gray-500 mb-4 font-mono uppercase tracking-widest">Live Output Preview</h2>
+      <div className="flex-1 flex flex-col items-center justify-center p-8">
+        <h2 className="text-emerald-100/60 mb-4 font-mono uppercase tracking-widest">Live Output Preview</h2>
         <div 
             ref={containerRef}
             className="w-full h-full max-w-[1000px] max-h-[600px] flex items-center justify-center relative overflow-hidden"
         >
             <div
-            className="relative bg-black shadow-2xl border border-gray-700 overflow-hidden pointer-events-none"
+            className="relative bg-black/70 shadow-2xl border border-emerald-200/10 overflow-hidden pointer-events-none"
             style={{
                 width: stageState.config.width,
                 height: stageState.config.height,

@@ -180,10 +180,10 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
 
   if (!session) {
     return (
-      <div className="flex h-screen bg-gray-900 text-white items-center justify-center">
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-8 w-full max-w-md text-center space-y-4">
+      <div className="flex h-screen items-center justify-center">
+        <div className="glass-panel rounded-lg p-8 w-full max-w-md text-center space-y-4">
           <h1 className="text-2xl font-bold">StageHand Console</h1>
-          <p className="text-gray-400 text-sm">Sign in with Twitch to continue</p>
+          <p className="text-emerald-100/70 text-sm">Sign in with Twitch to continue</p>
           <button
             onClick={() =>
               supabase.auth.signInWithOAuth({
@@ -193,7 +193,7 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
                 },
               })
             }
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded shadow-lg transition"
+            className="w-full glass-button font-bold py-3 px-4 rounded-lg transition"
           >
             Sign in with Twitch
           </button>
@@ -203,24 +203,24 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
   }
 
   if (!stageState) {
-    return <div className="p-8">Connecting to StageHand Console...</div>;
+    return <div className="p-8 text-emerald-100/70">Connecting to StageHand Console...</div>;
   }
 
   return (
-    <div className="flex h-screen bg-gray-900 text-white">
+    <div className="flex h-screen">
       {/* Locked Overlay */}
       {stageState.config.locked && (
-        <div className="absolute inset-0 z-50 bg-red-900/20 backdrop-blur-sm flex items-center justify-center pointer-events-none">
-          <div className="bg-red-600 text-white px-8 py-4 rounded-lg font-bold text-2xl shadow-2xl animate-pulse">
+        <div className="absolute inset-0 z-50 bg-emerald-950/30 backdrop-blur-sm flex items-center justify-center pointer-events-none">
+          <div className="glass-panel px-8 py-4 rounded-lg font-bold text-2xl shadow-2xl animate-pulse text-emerald-50">
             STAGE LOCKED BY PRODUCER
           </div>
         </div>
       )}
 
       {/* Sidebar */}
-      <div className={`w-64 bg-gray-800 border-r border-gray-700 p-4 flex flex-col gap-4 ${stageState.config.locked ? "opacity-50 pointer-events-none" : ""}`}>
+      <div className={`w-64 glass-panel p-4 flex flex-col gap-4 ${stageState.config.locked ? "opacity-50 pointer-events-none" : ""}`}>
         <h2 className="text-xl font-bold">Assets</h2>
-        <label className="bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold py-2 px-3 rounded cursor-pointer text-center">
+        <label className="glass-button text-sm font-semibold py-2 px-3 rounded cursor-pointer text-center">
           <input
             type="file"
             accept="image/*,video/*"
@@ -230,26 +230,26 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
           />
           {uploading ? "Uploading..." : "Upload Asset"}
         </label>
-        {uploadMessage && <div className="text-xs text-gray-400">{uploadMessage}</div>}
+        {uploadMessage && <div className="text-xs text-emerald-100/70">{uploadMessage}</div>}
         <div className="grid grid-cols-2 gap-2">
-          {assetsLoading && <div className="text-xs text-gray-500 col-span-2">Loading assets...</div>}
+          {assetsLoading && <div className="text-xs text-emerald-100/60 col-span-2">Loading assets...</div>}
           {!assetsLoading && assets.length === 0 && (
-            <div className="text-xs text-gray-500 col-span-2">No approved assets yet</div>
+            <div className="text-xs text-emerald-100/60 col-span-2">No approved assets yet</div>
           )}
           {assets.map((asset) => (
             <button
               key={asset.id}
               onClick={() => spawnAsset(asset.id)}
-              className="p-2 bg-gray-700 hover:bg-gray-600 rounded flex flex-col items-center gap-2 text-xs"
+              className="p-2 glass-panel hover:border-emerald-200/40 rounded flex flex-col items-center gap-2 text-xs"
             >
               {asset.type === "IMAGE" ? (
-                <div className="w-full aspect-square bg-black/50 flex items-center justify-center">
+                <div className="w-full aspect-square bg-black/40 flex items-center justify-center rounded">
                     <img src={asset.url} className="max-w-full max-h-full" />
                 </div>
               ) : asset.type === "VIDEO" ? (
-                <div className="w-full aspect-square bg-black/50 flex items-center justify-center font-bold">VID</div>
+                <div className="w-full aspect-square bg-black/40 flex items-center justify-center font-bold rounded">VID</div>
               ) : (
-                <div className="w-full aspect-square bg-black/50 flex items-center justify-center">T</div>
+                <div className="w-full aspect-square bg-black/40 flex items-center justify-center rounded">T</div>
               )}
               <span className="truncate w-full text-center">{asset.filename}</span>
             </button>
@@ -260,11 +260,11 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
       {/* Main Stage Area */}
       <div 
         ref={containerRef}
-        className="flex-1 flex items-center justify-center bg-gray-950 relative overflow-hidden"
+        className="flex-1 flex items-center justify-center relative overflow-hidden"
       >
         <div
           ref={stageRef}
-          className="relative bg-black shadow-2xl border border-gray-700 overflow-hidden"
+          className="relative bg-black/70 shadow-2xl border border-emerald-200/10 overflow-hidden"
           style={{
             width: stageState.config.width,
             height: stageState.config.height,

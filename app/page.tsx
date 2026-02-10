@@ -50,13 +50,13 @@ export default function Home() {
   const linksEnabled = resolvedChannelId.length > 0;
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gray-900 text-white">
-      <h1 className="text-4xl font-bold mb-4">StageHand</h1>
-      <p className="text-xl mb-8 text-gray-300">Live broadcast control room</p>
+    <main className="flex min-h-screen flex-col items-center justify-center p-24">
+      <h1 className="text-4xl font-bold mb-4 text-glow">StageHand</h1>
+      <p className="text-xl mb-8 text-emerald-100/80">Live broadcast control room</p>
 
       {!session ? (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-8 w-full max-w-md text-center space-y-4">
-          <p className="text-gray-400 text-sm">Sign in with Twitch to continue</p>
+        <div className="glass-panel rounded-lg p-8 w-full max-w-md text-center space-y-4">
+          <p className="text-emerald-100/70 text-sm">Sign in with Twitch to continue</p>
           <button
             onClick={() =>
               supabase.auth.signInWithOAuth({
@@ -66,28 +66,28 @@ export default function Home() {
                 },
               })
             }
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded shadow-lg transition"
+            className="w-full glass-button font-bold py-3 px-4 rounded-lg transition"
           >
             Sign in with Twitch
           </button>
         </div>
       ) : (
         <div className="w-full max-w-4xl space-y-6">
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 space-y-3">
+          <div className="glass-panel rounded-lg p-6 space-y-3">
             <div className="flex flex-col gap-2">
-              <label className="text-sm text-gray-400">Channel</label>
+              <label className="text-sm text-emerald-100/70">Channel</label>
               <input
                 value={channelId}
                 onChange={(event) => setChannelId(event.target.value)}
                 placeholder={defaultChannelId || "twitch-channel"}
-                className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white"
+                className="glass-input rounded px-3 py-2"
               />
             </div>
-            <div className="flex items-center justify-between text-xs text-gray-500">
+            <div className="flex items-center justify-between text-xs text-emerald-100/60">
               <span>Use your channel for Producer, or your streamer’s channel for Operator.</span>
               <button
                 onClick={() => supabase.auth.signOut()}
-                className="text-gray-400 hover:text-white transition"
+                className="text-emerald-100/70 hover:text-emerald-50 transition"
               >
                 Sign out
               </button>
@@ -97,32 +97,32 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <a
               href={linksEnabled ? `/producer/${resolvedChannelId}` : "#"}
-              className={`p-6 border border-gray-700 rounded-lg transition ${
-                linksEnabled ? "hover:bg-gray-800" : "opacity-50 pointer-events-none"
+              className={`p-6 rounded-lg transition glass-panel ${
+                linksEnabled ? "hover:border-emerald-200/50" : "opacity-50 pointer-events-none"
               }`}
             >
               <h2 className="text-2xl font-bold mb-2">Producer Console</h2>
-              <p className="text-gray-400">Manage roles, approvals, and scene controls.</p>
+              <p className="text-emerald-100/70">Manage roles, approvals, and scene controls.</p>
             </a>
 
             <a
               href={linksEnabled ? `/console/${resolvedChannelId}` : "#"}
-              className={`p-6 border border-gray-700 rounded-lg transition ${
-                linksEnabled ? "hover:bg-gray-800" : "opacity-50 pointer-events-none"
+              className={`p-6 rounded-lg transition glass-panel ${
+                linksEnabled ? "hover:border-emerald-200/50" : "opacity-50 pointer-events-none"
               }`}
             >
               <h2 className="text-2xl font-bold mb-2">Operator Console</h2>
-              <p className="text-gray-400">Spawn and manipulate assets on the stage.</p>
+              <p className="text-emerald-100/70">Spawn and manipulate assets on the stage.</p>
             </a>
 
             <a
               href={linksEnabled ? `/overlay/${resolvedChannelId}` : "#"}
-              className={`p-6 border border-gray-700 rounded-lg transition ${
-                linksEnabled ? "hover:bg-gray-800" : "opacity-50 pointer-events-none"
+              className={`p-6 rounded-lg transition glass-panel ${
+                linksEnabled ? "hover:border-emerald-200/50" : "opacity-50 pointer-events-none"
               }`}
             >
               <h2 className="text-2xl font-bold mb-2">Overlay Renderer</h2>
-              <p className="text-gray-400">The transparent layer for OBS.</p>
+              <p className="text-emerald-100/70">The transparent layer for OBS.</p>
             </a>
           </div>
         </div>

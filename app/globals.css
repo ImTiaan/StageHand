@@ -3,17 +3,54 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 0, 0, 0;
-  --background-end-rgb: 0, 0, 0;
+  --bottle-900: #001a00;
+  --bottle-800: #002400;
+  --bottle-700: #003b00;
+  --bottle-600: #004d00;
+  --bottle-500: #006600;
+  --bottle-400: #008000;
+  --glass-surface: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-highlight: rgba(255, 255, 255, 0.2);
+  --background-base: #050a08;
+  --background-glow: #0f2e26;
+  --foreground: #f0fdf4;
+  --text-glow: rgba(74, 222, 128, 0.3);
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  color: var(--foreground);
+  background: radial-gradient(circle at top, var(--background-glow), var(--background-base) 60%);
+  min-height: 100vh;
+}
+
+@layer components {
+  .glass-panel {
+    background: var(--glass-surface);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(18px);
+  }
+
+  .glass-button {
+    background: linear-gradient(135deg, rgba(0, 128, 0, 0.25), rgba(0, 77, 0, 0.4));
+    border: 1px solid rgba(0, 128, 0, 0.5);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+    color: var(--foreground);
+  }
+
+  .glass-button:hover {
+    border-color: var(--glass-highlight);
+    box-shadow: 0 16px 30px rgba(0, 0, 0, 0.4);
+  }
+
+  .glass-input {
+    background: rgba(0, 36, 0, 0.4);
+    border: 1px solid var(--glass-border);
+    color: var(--foreground);
+  }
+
+  .text-glow {
+    text-shadow: 0 0 18px var(--text-glow);
+  }
 }
