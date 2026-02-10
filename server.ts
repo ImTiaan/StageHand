@@ -140,7 +140,18 @@ app.prepare().then(() => {
     }
   });
 
-  const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer);
+  const allowedOrigins = (process.env.SOCKET_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
+    cors: {
+      origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+      methods: ["GET", "POST"],
+      credentials: true,
+    },
+  });
 
   io.use(async (socket, next) => {
     const token = socket.handshake.auth?.access_token as string | undefined;
