@@ -57,6 +57,51 @@ const MOCK_ASSETS: Record<string, Asset> = {
   },
 };
 
+type AssetRow = {
+  id: string;
+  type: Asset["type"];
+  url: string;
+  filename: string;
+  metadata: Asset["metadata"] | null;
+  uploader_id: string;
+  approved: boolean;
+  created_at: string;
+};
+
+const mapAssetRow = (row: AssetRow): Asset => ({
+  id: row.id,
+  type: row.type,
+  url: row.url,
+  filename: row.filename,
+  metadata: row.metadata ?? {},
+  uploaderId: row.uploader_id,
+  approved: row.approved,
+  createdAt: new Date(row.created_at).getTime(),
+});
+
+const fetchAsset = async (assetId: string): Promise<Asset | null> => {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return MOCK_ASSETS[assetId] ?? null;
+  }
+
+  const { data, error } = await supabase
+    .from("assets")
+    .select("*")
+    .eq("id", assetId)
+    .single();
+
+  if (error || !data) {
+    return MOCK_ASSETS[assetId] ?? null;
+  }
+
+  const asset = mapAssetRow(data as AssetRow);
+  if (!asset.approved) {
+    return null;
+  }
+
+  return asset;
+};
+
 const getOrCreateStage = (channelId: string): StageState => {
   if (!stages[channelId]) {
     stages[channelId] = {
@@ -133,7 +178,7 @@ app.prepare().then(() => {
       log(channelId, `User joined`);
     });
 
-    socket.on("stage:add-element", (assetId, initialTransform) => {
+    socket.on("stage:add-element", async (assetId, initialTransform) => {
       const channelId = getChannelId();
       if (!channelId) return;
       if (!socket.data.user) {
@@ -149,10 +194,10 @@ app.prepare().then(() => {
 
       pushHistory(channelId, stage);
 
-      const asset = MOCK_ASSETS[assetId];
+      const asset = await fetchAsset(assetId);
       
       if (!asset) {
-          console.error(`Asset ${assetId} not found`);
+          console.error(`Asset ${assetId} not found or not approved`);
           return;
       }
 

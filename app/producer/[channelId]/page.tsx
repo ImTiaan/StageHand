@@ -4,8 +4,30 @@ import { useEffect, useState, useRef } from "react";
 import { useSocket } from "@/hooks/useSocket";
 import { supabase } from "@/lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
-import { StageState } from "@/types";
+import { StageState, Asset } from "@/types";
 import { Stage } from "@/components/Stage";
+
+type AssetRow = {
+  id: string;
+  type: Asset["type"];
+  url: string;
+  filename: string;
+  metadata: Asset["metadata"] | null;
+  uploader_id: string;
+  approved: boolean;
+  created_at: string;
+};
+
+const mapAssetRow = (row: AssetRow): Asset => ({
+  id: row.id,
+  type: row.type,
+  url: row.url,
+  filename: row.filename,
+  metadata: row.metadata ?? {},
+  uploaderId: row.uploader_id,
+  approved: row.approved,
+  createdAt: new Date(row.created_at).getTime(),
+});
 
 export default function ProducerPage({ params }: { params: { channelId: string } }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -14,6 +36,9 @@ export default function ProducerPage({ params }: { params: { channelId: string }
   const [logs, setLogs] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+  const [pendingAssets, setPendingAssets] = useState<Asset[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
@@ -49,6 +74,29 @@ export default function ProducerPage({ params }: { params: { channelId: string }
     };
   }, [socket, params.channelId]);
 
+  useEffect(() => {
+    if (!session) return;
+    const loadPendingAssets = async () => {
+      setPendingLoading(true);
+      const { data, error } = await supabase
+        .from("assets")
+        .select("*")
+        .eq("approved", false)
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        setPendingMessage(error.message);
+        setPendingAssets([]);
+      } else {
+        setPendingMessage(null);
+        setPendingAssets((data ?? []).map(mapAssetRow));
+      }
+      setPendingLoading(false);
+    };
+
+    loadPendingAssets();
+  }, [session]);
+
   // Handle auto-scaling for preview
   useEffect(() => {
     if (!stageState || !containerRef.current) return;
@@ -81,6 +129,36 @@ export default function ProducerPage({ params }: { params: { channelId: string }
 
   const toggleLock = () => {
     socket?.emit("stage:toggle-lock");
+  };
+
+  const approveAsset = async (assetId: string) => {
+    setPendingMessage(null);
+    const { error } = await supabase
+      .from("assets")
+      .update({ approved: true })
+      .eq("id", assetId);
+
+    if (error) {
+      setPendingMessage(error.message);
+      return;
+    }
+
+    setPendingAssets((prev) => prev.filter((asset) => asset.id !== assetId));
+  };
+
+  const rejectAsset = async (assetId: string) => {
+    setPendingMessage(null);
+    const { error } = await supabase
+      .from("assets")
+      .delete()
+      .eq("id", assetId);
+
+    if (error) {
+      setPendingMessage(error.message);
+      return;
+    }
+
+    setPendingAssets((prev) => prev.filter((asset) => asset.id !== assetId));
   };
 
   if (!session) {
@@ -157,6 +235,39 @@ export default function ProducerPage({ params }: { params: { channelId: string }
                     ))
                 )}
             </div>
+        </div>
+
+        <div className="flex-1 overflow-auto">
+          <h2 className="text-lg font-semibold mb-2">Pending Uploads</h2>
+          {pendingMessage && <div className="text-xs text-gray-400 mb-2">{pendingMessage}</div>}
+          <div className="text-xs text-gray-300 bg-black/30 p-2 rounded h-40 overflow-y-auto">
+            {pendingLoading && <div className="text-gray-600 italic">Loading uploads...</div>}
+            {!pendingLoading && pendingAssets.length === 0 && (
+              <div className="text-gray-600 italic">Nothing waiting for approval</div>
+            )}
+            {pendingAssets.map((asset) => (
+              <div key={asset.id} className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex flex-col">
+                  <span className="font-semibold">{asset.filename}</span>
+                  <span className="text-gray-500">{asset.type}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => approveAsset(asset.id)}
+                    className="bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-2 py-1 rounded"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => rejectAsset(asset.id)}
+                    className="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-2 py-1 rounded"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

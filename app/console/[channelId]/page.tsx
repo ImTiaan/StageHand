@@ -4,42 +4,30 @@ import { useEffect, useState, useRef } from "react";
 import { useSocket } from "@/hooks/useSocket";
 import { supabase } from "@/lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
-import { StageState, StageElement, Asset } from "@/types";
+import { StageState, Asset } from "@/types";
 import { TransformGizmo } from "@/components/TransformGizmo";
 
-// Mock assets for the sidebar (should fetch from API)
-const MOCK_ASSETS: Asset[] = [
-  {
-    id: "asset-1",
-    type: "IMAGE",
-    url: "https://placehold.co/400x400/png",
-    filename: "Square Placeholder",
-    metadata: { width: 400, height: 400 },
-    uploaderId: "user-1",
-    approved: true,
-    createdAt: Date.now(),
-  },
-  {
-    id: "asset-2",
-    type: "TEXT",
-    url: "",
-    filename: "Hello World",
-    metadata: {},
-    uploaderId: "user-1",
-    approved: true,
-    createdAt: Date.now(),
-  },
-  {
-    id: "asset-3",
-    type: "VIDEO",
-    url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-    filename: "flower.mp4",
-    metadata: { width: 400, height: 400 },
-    uploaderId: "user-1",
-    approved: true,
-    createdAt: Date.now(),
-  },
-];
+type AssetRow = {
+  id: string;
+  type: Asset["type"];
+  url: string;
+  filename: string;
+  metadata: Asset["metadata"] | null;
+  uploader_id: string;
+  approved: boolean;
+  created_at: string;
+};
+
+const mapAssetRow = (row: AssetRow): Asset => ({
+  id: row.id,
+  type: row.type,
+  url: row.url,
+  filename: row.filename,
+  metadata: row.metadata ?? {},
+  uploaderId: row.uploader_id,
+  approved: row.approved,
+  createdAt: new Date(row.created_at).getTime(),
+});
 
 export default function ConsolePage({ params }: { params: { channelId: string } }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -49,6 +37,10 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
@@ -72,6 +64,28 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
         socket.off("stage:update");
     };
   }, [socket, params.channelId]);
+
+  useEffect(() => {
+    if (!session) return;
+    const loadAssets = async () => {
+      setAssetsLoading(true);
+      const { data, error } = await supabase
+        .from("assets")
+        .select("*")
+        .eq("approved", true)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        setUploadMessage(error.message);
+        setAssets([]);
+      } else {
+        setAssets((data ?? []).map(mapAssetRow));
+      }
+      setAssetsLoading(false);
+    };
+
+    loadAssets();
+  }, [session]);
 
   // Handle auto-scaling of the stage to fit container
   useEffect(() => {
@@ -136,6 +150,34 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
       }
   };
 
+  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !session) return;
+    setUploading(true);
+    setUploadMessage(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch("/api/uploads", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      setUploadMessage(payload?.error ?? "Upload failed");
+    } else {
+      setUploadMessage("Uploaded for approval");
+    }
+
+    setUploading(false);
+    event.target.value = "";
+  };
+
   if (!session) {
     return (
       <div className="flex h-screen bg-gray-900 text-white items-center justify-center">
@@ -178,8 +220,23 @@ export default function ConsolePage({ params }: { params: { channelId: string } 
       {/* Sidebar */}
       <div className={`w-64 bg-gray-800 border-r border-gray-700 p-4 flex flex-col gap-4 ${stageState.config.locked ? "opacity-50 pointer-events-none" : ""}`}>
         <h2 className="text-xl font-bold">Assets</h2>
+        <label className="bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold py-2 px-3 rounded cursor-pointer text-center">
+          <input
+            type="file"
+            accept="image/*,video/*"
+            className="hidden"
+            onChange={handleUpload}
+            disabled={uploading}
+          />
+          {uploading ? "Uploading..." : "Upload Asset"}
+        </label>
+        {uploadMessage && <div className="text-xs text-gray-400">{uploadMessage}</div>}
         <div className="grid grid-cols-2 gap-2">
-          {MOCK_ASSETS.map((asset) => (
+          {assetsLoading && <div className="text-xs text-gray-500 col-span-2">Loading assets...</div>}
+          {!assetsLoading && assets.length === 0 && (
+            <div className="text-xs text-gray-500 col-span-2">No approved assets yet</div>
+          )}
+          {assets.map((asset) => (
             <button
               key={asset.id}
               onClick={() => spawnAsset(asset.id)}
